@@ -10,11 +10,12 @@ from backend.app.main import create_app
 
 
 @pytest.fixture()
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
     data_root = tmp_path / "data" / "txt"
     data_root.mkdir(parents=True, exist_ok=True)
     (data_root / "sample.txt").write_text("Sample knowledge base", encoding="utf-8")
 
+    monkeypatch.setenv("GRAPHRAG_USE_STUB", "true")
     app = create_app(base_path=tmp_path)
     return TestClient(app)
 
@@ -28,7 +29,9 @@ def test_health_endpoint(client: TestClient):
 def test_ingest_and_chat_streaming(client: TestClient):
     ingest_response = client.post("/chat/ingest")
     assert ingest_response.status_code == 200
-    assert ingest_response.json()["documents_ingested"] >= 1
+    payload = ingest_response.json()
+    assert payload["documents_ingested"] >= 1
+    assert payload["using_stub"] is True
 
     with client.stream("POST", "/chat/stream", json={"prompt": "Hello"}) as stream:
         chunks = list(stream.iter_text())
@@ -51,4 +54,6 @@ def test_upload_and_list_documents(client: TestClient, tmp_path):
 
     documents_response = client.get("/chat/documents")
     assert documents_response.status_code == 200
-    assert "upload.txt" in documents_response.json()["documents"]
+    docs = documents_response.json()
+    assert docs["using_stub"] is True
+    assert any(doc["name"] == "upload.txt" for doc in docs["documents"])

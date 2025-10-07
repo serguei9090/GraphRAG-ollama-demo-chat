@@ -1,10 +1,10 @@
 """Utilities for ingesting content from the data directories."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
-import hashlib
 from typing import List
 
 from .graphrag import Document
@@ -37,14 +37,14 @@ class DataDirectoryIngestor:
 
     def _read_pdf(self, path: Path) -> str:
         try:
-            import PyPDF2  # type: ignore
+            from pypdf import PdfReader  # type: ignore
         except Exception:  # pragma: no cover - optional dependency
-            LOGGER.warning("PyPDF2 not available, returning placeholder text for %s", path)
+            LOGGER.warning("pypdf not available, returning placeholder text for %s", path)
             return f"PDF document at {path.name}"
 
         content = []
         with path.open("rb") as pdf_file:
-            reader = PyPDF2.PdfReader(pdf_file)
+            reader = PdfReader(pdf_file)
             for page in reader.pages:
                 try:
                     page_text = page.extract_text() or ""
@@ -96,6 +96,7 @@ class DataDirectoryIngestor:
                     metadata["error"] = str(exc)
 
                 if content.strip():
+                    metadata["sha1"] = hashlib.sha1(content.encode("utf-8")).hexdigest()
                     documents.append(Document(name=name, content=content, metadata=metadata))
 
         return documents
@@ -107,13 +108,33 @@ class DataDirectoryIngestor:
             for pdf in sorted(self.pdf_dir.glob("*.pdf")):
                 content = self._read_pdf(pdf)
                 if content.strip():
-                    documents.append(Document(name=pdf.name, content=content, metadata={"source": "pdf"}))
+                    documents.append(
+                        Document(
+                            name=pdf.name,
+                            content=content,
+                            metadata={
+                                "source": "pdf",
+                                "sha1": hashlib.sha1(content.encode("utf-8")).hexdigest(),
+                                "path": str(pdf),
+                            },
+                        )
+                    )
 
         if self.txt_dir.exists():
             for txt in sorted(self.txt_dir.glob("*.txt")):
                 content = self._read_text(txt)
                 if content.strip():
-                    documents.append(Document(name=txt.name, content=content, metadata={"source": "txt"}))
+                    documents.append(
+                        Document(
+                            name=txt.name,
+                            content=content,
+                            metadata={
+                                "source": "txt",
+                                "sha1": hashlib.sha1(content.encode("utf-8")).hexdigest(),
+                                "path": str(txt),
+                            },
+                        )
+                    )
 
         if self.url_dir.exists():
             documents.extend(self._fetch_remote_documents())

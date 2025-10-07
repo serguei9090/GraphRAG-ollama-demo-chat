@@ -1,122 +1,181 @@
 # GraphRAG Ollama Demo Chat
 
-This repository provides a full-stack demonstration of building a lightweight GraphRAG-style chat interface on top of an Ollama-like backend. The project includes a FastAPI service for data ingestion and chat streaming, a Vite + React + Tailwind frontend, and an automated test suite for both layers.
+This project delivers a full-stack Retrieval-Augmented Generation (RAG) experience that combines the
+[FalkorDB GraphRAG-SDK](https://github.com/FalkorDB/GraphRAG-SDK) with a local
+[Ollama](https://ollama.ai/) deployment running the `llama3.1:8b` model. The backend exposes FastAPI
+endpoints for ingesting PDFs, text files, and remote URLs into a knowledge graph and then streams
+chat responses sourced from that graph. A Vite + React + Tailwind frontend consumes the API and
+presents upload, status, and chat views. For development and CI the service can transparently fall
+back to an in-memory stub engine, allowing the repository to be exercised without external services.
 
 ## Repository Structure
 
 ```
 backend/          # FastAPI application
   app/
-    main.py       # FastAPI entrypoint
-    routers/      # Chat router definitions
-    services/     # Lightweight GraphRAG + ingestion helpers
-frontend/         # Vite + React + Tailwind SPA
-  src/            # React application source
-  vite.config.ts  # Vite configuration with API proxy
-  vitest.config.ts# Vitest test configuration
-  package.json    # Frontend dependencies and scripts
+    main.py       # FastAPI entrypoint and application factory
+    routers/      # API routers (chat + ingestion)
+    services/     # GraphRAG integration and data ingestion utilities
+frontend/         # Vite + React + Tailwind single-page application
+  src/            # React components and API client
+  vite.config.ts  # Development proxy configuration
+  vitest.config.ts# Vitest test runner configuration
+  package.json    # Frontend scripts and dependencies
 data/
-  pdf/            # Drop PDF documents for ingestion
-  txt/            # Drop TXT documents for ingestion
-  url/            # Add URL manifests (JSON array or line-separated)
+  pdf/            # Local PDFs ingested into the knowledge graph
+  txt/            # Local plain-text files ingested into the graph
+  url/            # `.txt` manifests pointing at remote URLs to fetch and ingest
 tests/
-  backend/        # Pytest suite for API and ingestion
-  frontend/       # Vitest suite for React components
+  backend/        # Pytest suite exercising ingestion and streaming endpoints
+  frontend/       # Vitest suite covering the React experience
 ```
 
 ## Prerequisites
 
+To run the production GraphRAG pipeline you will need:
+
 - Python 3.10+
 - Node.js 18+
-- (Optional) [Ollama](https://ollama.ai/) runtime if you plan to replace the stub GraphRAG implementation with a real model.
+- Docker (to host FalkorDB)
+- An [Ollama](https://ollama.ai/) runtime with the `llama3.1:8b` model pulled locally
+- Credentials for your LiteLLM provider (for example `OPENAI_API_KEY`) used during ontology and
+  Cypher generation
+
+> **Tip:** When any of these dependencies are missing the backend logs a warning and falls back to
+> the lightweight in-memory stub so the rest of the stack keeps functioning.
 
 ## Backend Setup
 
-1. Create and activate a virtual environment.
+1. Create and activate a virtual environment, then install dependencies:
 
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   ```
-
-2. Install backend dependencies.
-
-   ```bash
+   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-3. Run the FastAPI application.
+2. Copy the example environment file and update values as needed:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   | Variable | Description |
+   | --- | --- |
+   | `FALKORDB_HOST`, `FALKORDB_PORT` | Connection details for FalkorDB (defaults target the Docker setup below). |
+   | `FALKORDB_USERNAME`, `FALKORDB_PASSWORD` | Optional FalkorDB credentials. |
+   | `GRAPHRAG_KG_NAME` | Logical name for the knowledge graph. |
+   | `GRAPHRAG_EXTRACTION_MODEL`, `GRAPHRAG_CYPHER_MODEL` | LiteLLM model identifiers (e.g. `openai/gpt-4.1`). |
+   | `OLLAMA_MODEL`, `OLLAMA_BASE_URL` | Ollama QA model and endpoint (`llama3.1:8b` at `http://localhost:11434`). |
+   | `GRAPHRAG_AUTO_REFRESH_ONTOLOGY` | When `true` (default) the ontology is regenerated on each ingest. |
+   | `GRAPHRAG_RESET_BEFORE_INGEST` | Force a FalkorDB reset before every ingest operation. |
+   | `GRAPHRAG_USE_STUB` | Set to `true` to explicitly opt into the in-memory stub. |
+
+3. Start FalkorDB using Docker:
+
+   ```bash
+   docker run -p 6379:6379 -p 3000:3000 -it --rm -v $(pwd)/data:/data falkordb/falkordb:latest
+   ```
+
+4. Ensure the Ollama model is available locally:
+
+   ```bash
+   ollama pull llama3.1:8b
+   # optional: run once to warm the model
+   ollama run llama3.1:8b "ready"
+   ```
+
+5. Launch the FastAPI server (the example command enables the default live reload):
 
    ```bash
    uvicorn backend.app.main:app --reload
    ```
 
-### Data Directories
+   On startup the service attempts to connect to FalkorDB, configure the GraphRAG SDK, and report
+   whether it is using the real backend or the stub fallback.
 
-The backend automatically watches three folders under `data/`:
+### Data Directories and Ingestion
 
-- `data/pdf/`: Place PDF documents here. PyPDF2 is used to extract text when available.
-- `data/txt/`: Place plain text documents here.
-- `data/url/`: Create `.txt` manifests containing either JSON arrays of URLs or one URL per line. These are loaded as virtual documents.
+The application monitors three folders under `data/` and exposes upload endpoints for the same
+formats:
 
-You can also upload `.pdf` and `.txt` files from the frontend, which will store them in the appropriate directory before ingestion.
+- `data/pdf/` — Local PDFs (text is extracted with [`pypdf`](https://pypi.org/project/pypdf/)).
+- `data/txt/` — UTF-8 encoded text files.
+- `data/url/` — `.txt` manifests containing either JSON arrays or newline-delimited URLs. Content is
+  fetched via `httpx` at ingest time and stored alongside metadata.
 
-### API Endpoints
-
-- `GET /health`: Simple health check.
-- `POST /chat/upload`: Upload a `.pdf` or `.txt` file. The backend stores the file and makes it available for ingestion.
-- `POST /chat/ingest`: Read documents from the data directories (including remote URL manifests) and load them into the in-memory GraphRAG stub.
-- `GET /chat/documents`: List the currently ingested documents.
-- `POST /chat/stream`: Stream a chat response based on the ingested documents. The request body should be JSON with a `prompt` field.
+Each document is normalised into a GraphRAG source with SHA-1 hashes and source path metadata so you
+can track provenance from the frontend.
 
 ## Frontend Setup
 
-1. Install dependencies.
+1. Install dependencies and start the development server:
 
    ```bash
    cd frontend
    npm install
-   ```
-
-2. Run the development server.
-
-   ```bash
    npm run dev
    ```
 
-The Vite dev server proxies API requests from `/api/*` to the FastAPI backend running on `http://localhost:8000`.
+2. The Vite dev server proxies `/api/*` requests to `http://localhost:8000` by default. To target a
+   different backend supply `VITE_API_BASE_URL` when running or building the frontend.
 
-You can override the API base URL by defining `VITE_API_BASE_URL` when building or running the frontend (defaults to `/api`).
+The UI surfaces the current backend mode (stub vs. GraphRAG), ingestion summaries, and document
+metadata while providing a streaming chat pane powered by the `/chat/stream` endpoint.
+
+## API Overview
+
+- `GET /health` — Service liveness probe.
+- `POST /chat/upload` — Upload a `.pdf` or `.txt` document (stored in `data/`).
+- `POST /chat/ingest` — Collects local/remote documents, optionally resets FalkorDB, rebuilds the
+  ontology, and returns an ingestion summary (`documents_ingested`, `graph_name`, `ontology_path`,
+  `using_stub`, and per-document names).
+- `GET /chat/documents` — Lists currently loaded documents including metadata (`path`, `sha1`) and
+  reports the backend mode (`using_stub`).
+- `POST /chat/stream` — Streams a response for the supplied `prompt`. When running against GraphRAG
+  the service relays tokens from `ChatSession.send_message_stream`; in stub mode it emits a
+  deterministic highlight summary.
 
 ## Running Tests
 
-### Backend Tests
-
-From the repository root (with the virtual environment activated):
+Backend tests rely on the stub to avoid external services. Ensure `GRAPHRAG_USE_STUB=true` in the
+environment (Pytest automatically sets this in the provided fixtures):
 
 ```bash
 pytest
 ```
 
-### Frontend Tests
-
-From the `frontend/` directory:
+Frontend tests run with Vitest and jsdom:
 
 ```bash
-npm run test
+cd frontend
+npm run test -- run
 ```
 
-## End-to-End Verification
+## End-to-End Verification Checklist
 
-1. Start the FastAPI server (`uvicorn backend.app.main:app --reload`).
-2. Start the Vite dev server (`npm run dev` from `frontend/`).
-3. Navigate to `http://localhost:5173`.
-4. Upload one or more `.pdf` or `.txt` files or manually drop them in the `data/` folders.
-5. Click **Ingest Documents** to load the content into the chat engine.
-6. Interact with the chat panel to query the ingested knowledge base. Responses stream live from the backend.
+1. Start FalkorDB and verify port 6379 is reachable.
+2. Pull `llama3.1:8b` with Ollama and ensure the daemon is running on `http://localhost:11434`.
+3. Export your LiteLLM provider credentials (e.g. `export OPENAI_API_KEY=...`).
+4. Populate `data/pdf`, `data/txt`, or `data/url` with sample documents.
+5. Run the FastAPI backend and confirm the logs indicate `using_stub=False`.
+6. Start the React frontend (`npm run dev`) and open `http://localhost:5173`.
+7. Click **Ingest Documents** to build the FalkorDB graph and ontology.
+8. Ask a question in the chat panel and observe streamed answers sourced from your documents.
 
-## Extending the Demo
+If you see `using_stub=true` in the UI, double-check the FalkorDB container, LiteLLM credentials, and
+Ollama endpoint. The fallback keeps the workflow usable even while dependencies are offline.
 
-The current GraphRAG pipeline is an in-memory stub designed for educational and testing purposes. To integrate a real GraphRAG + Ollama workflow, replace the logic in `backend/app/services/graphrag.py` with calls to your preferred embedding store and Ollama model.
+## Troubleshooting
 
-Contributions and improvements are welcome!
+- **`LiteLLM provider configuration error`** — Ensure the relevant API key (for example
+  `OPENAI_API_KEY`, `GROQ_API_KEY`, etc.) is exported before starting the backend.
+- **`Failed to connect to FalkorDB`** — Verify the Docker container is running and reachable at the
+  host/port defined in `.env`.
+- **Ollama streaming errors** — Confirm the daemon is listening on `OLLAMA_BASE_URL` and the
+  specified model (`OLLAMA_MODEL`) is installed.
+- **CI / offline environments** — Set `GRAPHRAG_USE_STUB=true` to continue using the in-memory
+  fallback without external dependencies.
+
+Happy hacking!

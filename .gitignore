@@ -5,6 +5,4 @@ __pycache__/
 node_modules/
 frontend/dist/
 .vite/
-node_modules/
-frontend/dist/
 .env

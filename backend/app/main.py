@@ -7,19 +7,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import chat
-from .services.graphrag import GraphRAGChatEngine
+from .services.graphrag import GraphRAGConfig, GraphRAGService, StubGraphRAGChatEngine
 from .services.ingestion import DataDirectoryIngestor
 
 LOGGER = logging.getLogger(__name__)
 
 
-def create_app(*, base_path: Path | None = None, engine: GraphRAGChatEngine | None = None) -> FastAPI:
+def create_app(*, base_path: Path | None = None, engine: GraphRAGService | StubGraphRAGChatEngine | None = None) -> FastAPI:
     """Application factory used by both production and tests."""
 
     resolved_base = base_path or Path(__file__).resolve().parents[2]
     app = FastAPI(title="GraphRAG Ollama Demo")
 
-    app.state.engine = engine or GraphRAGChatEngine()
+    if engine is None:
+        config = GraphRAGConfig.from_env(resolved_base)
+        app.state.engine = GraphRAGService(config)
+    else:
+        app.state.engine = engine
     app.state.ingestor = DataDirectoryIngestor(base_path=resolved_base)
 
     app.include_router(chat.router)

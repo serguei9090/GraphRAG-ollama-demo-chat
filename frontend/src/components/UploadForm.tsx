@@ -32,18 +32,18 @@ const UploadForm: React.FC<UploadFormProps> = ({ onUploadSuccess, onError }) => 
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <label className="block text-sm font-medium text-slate-200">Upload PDF or TXT</label>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <label className="block text-sm font-medium text-surface">Upload PDF or TXT</label>
       <input
         type="file"
         accept=".pdf,.txt"
         onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        className="w-full text-sm text-slate-200"
+        className="w-full text-sm text-surface/80 file:mr-4 file:rounded-md file:border-0 file:bg-surface file:px-4 file:py-2 file:text-neutral-dark"
       />
       <button
         type="submit"
         disabled={!file || uploading}
-        className="w-full rounded bg-indigo-500 py-2 text-white hover:bg-indigo-400 disabled:opacity-50"
+        className="w-full rounded-lg bg-primary py-2 text-surface font-medium shadow hover:bg-primary-dark transition disabled:opacity-60"
       >
         {uploading ? 'Uploading...' : 'Upload'}
       </button>

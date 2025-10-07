@@ -1,0 +1,118 @@
+{
+  "entities": [
+    {
+      "label": "Person",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "KubernetesNetworkPolicy",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "namespace",
+          "type": "string",
+          "unique": false,
+          "required": true
+        },
+        {
+          "name": "apiVersion",
+          "type": "string",
+          "unique": false,
+          "required": true
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "unique": false,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "Pod",
+      "attributes": [
+        {
+          "name": "label",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "CNIPlugin",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "capabilities",
+          "type": "string",
+          "unique": false,
+          "required": false
+        }
+      ],
+      "description": ""
+    }
+  ],
+  "relations": [
+    {
+      "label": "WRITTEN_BY",
+      "source": {
+        "label": "KubernetesNetworkPolicy"
+      },
+      "target": {
+        "label": "Person"
+      },
+      "attributes": []
+    },
+    {
+      "label": "APPLIES_TO",
+      "source": {
+        "label": "KubernetesNetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": []
+    },
+    {
+      "label": "MONITORS",
+      "source": {
+        "label": "KubernetesNetworkPolicy"
+      },
+      "target": {
+        "label": "KubernetesNetworkPolicy"
+      },
+      "attributes": []
+    },
+    {
+      "label": "USES",
+      "source": {
+        "label": "KubernetesNetworkPolicy"
+      },
+      "target": {
+        "label": "CNIPlugin"
+      },
+      "attributes": []
+    }
+  ]
+}

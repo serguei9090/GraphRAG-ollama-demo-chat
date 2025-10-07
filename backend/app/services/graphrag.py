@@ -39,6 +39,15 @@ class GraphRAGConfigurationError(RuntimeError):
     """Raised when the production GraphRAG backend cannot be initialised."""
 
 
+def _mask_secret(value: Optional[str], visible: int = 4) -> str:
+    """Mask sensitive values while still indicating presence."""
+    if not value:
+        return "<missing>"
+    if len(value) <= visible * 2:
+        return f"{value[:visible]}***"
+    return f"{value[:visible]}***{value[-visible:]}"
+
+
 @dataclass
 class Document:
     """Simple representation of an ingested document."""
@@ -78,8 +87,8 @@ class GraphRAGConfig:
         """Load configuration from the environment and optional .env file."""
 
         env_path = base_path / ".env"
-        load_dotenv(env_path, override=False)
-        load_dotenv(override=False)
+        load_dotenv(env_path, override=True)
+        load_dotenv(override=True)
 
         def env(name: str, default: Optional[str] = None) -> Optional[str]:
             return os.getenv(name, default)
@@ -242,8 +251,8 @@ class GraphRAGService:
             self._last_ingest_summary = summary
             return summary
 
-        if self._knowledge_graph is None or self._model_config is None:
-            raise GraphRAGConfigurationError("Knowledge graph backend is not available")
+        if self._model_config is None:
+            raise GraphRAGConfigurationError("Model configuration not available")
 
         if not documents:
             summary = {
@@ -264,10 +273,21 @@ class GraphRAGService:
         sources = [self._build_source(doc) for doc in documents]
 
         ontology_refreshed = False
-        if self.config.auto_refresh_ontology or self._ontology is None:
+        ensure_knowledge_graph = self._knowledge_graph is None
+
+        if ensure_knowledge_graph or self.config.auto_refresh_ontology or self._ontology is None:
             self._ontology = self._build_ontology(sources)
-            self._knowledge_graph.ontology = self._ontology
             ontology_refreshed = True
+
+        if ensure_knowledge_graph:
+            if self._ontology is None:
+                raise GraphRAGConfigurationError("Failed to build ontology during ingest")
+            self._create_knowledge_graph(self._ontology)
+        elif self._knowledge_graph is None:
+            raise GraphRAGConfigurationError("Knowledge graph backend is not available")
+        else:
+            if ontology_refreshed:
+                self._knowledge_graph.ontology = self._ontology
 
         try:
             self._knowledge_graph.process_sources(sources, hide_progress=True)
@@ -346,6 +366,13 @@ class GraphRAGService:
             raise GraphRAGConfigurationError("graphrag_sdk is not installed")
 
         try:
+            LOGGER.info(
+                "Initialising LiteLLM models (extraction=%s, cypher=%s, LITELLM_CONFIG_PATH=%s, OPENAI_API_KEY=%s)",
+                self.config.extraction_model,
+                self.config.cypher_model or self.config.extraction_model,
+                os.getenv("LITELLM_CONFIG_PATH", "<unset>"),
+                _mask_secret(os.getenv("OPENAI_API_KEY")),
+            )
             extract_model = LiteModel(model_name=self.config.extraction_model)
             cypher_model_name = self.config.cypher_model or self.config.extraction_model
             cypher_model = LiteModel(model_name=cypher_model_name)
@@ -364,7 +391,17 @@ class GraphRAGService:
         )
 
         ontology = self._load_existing_ontology()
+        if ontology is None:
+            LOGGER.info("No ontology found at %s; it will be generated during the first ingest.", self.config.ontology_path)
+            self._knowledge_graph = None
+            self._ontology = None
+            self._chat_session = None
+            self._documents.clear()
+            return
 
+        self._create_knowledge_graph(ontology)
+
+    def _create_knowledge_graph(self, ontology: Ontology) -> None:
         try:
             self._knowledge_graph = KnowledgeGraph(
                 name=self.config.kg_name,

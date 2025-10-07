@@ -1,0 +1,207 @@
+{
+  "entities": [
+    {
+      "label": "Person",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "NetworkPolicy",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "namespace",
+          "type": "string",
+          "unique": false,
+          "required": false
+        },
+        {
+          "name": "policyTypes",
+          "type": "string",
+          "unique": false,
+          "required": false
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "Pod",
+      "attributes": [
+        {
+          "name": "label",
+          "type": "string",
+          "unique": true,
+          "required": true
+        },
+        {
+          "name": "app",
+          "type": "string",
+          "unique": false,
+          "required": false
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "IPBlock",
+      "attributes": [
+        {
+          "name": "cidr",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "CNIProvider",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    },
+    {
+      "label": "Workload",
+      "attributes": [
+        {
+          "name": "type",
+          "type": "string",
+          "unique": true,
+          "required": true
+        }
+      ],
+      "description": ""
+    }
+  ],
+  "relations": [
+    {
+      "label": "WRITTEN_BY",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Person"
+      },
+      "attributes": []
+    },
+    {
+      "label": "APPLIES_TO",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": [
+        {
+          "name": "type",
+          "type": "string",
+          "unique": false,
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "EXCLUDED_FROM",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": []
+    },
+    {
+      "label": "ALLOW_INCOMING",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": [
+        {
+          "name": "ports",
+          "type": "number",
+          "unique": false,
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "ALLOW_OUTGOING",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": [
+        {
+          "name": "ports",
+          "type": "number",
+          "unique": false,
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "BLOCK",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "IPBlock"
+      },
+      "attributes": []
+    },
+    {
+      "label": "PROVIDES_CAPABILITIES",
+      "source": {
+        "label": "CNIProvider"
+      },
+      "target": {
+        "label": "NetworkPolicy"
+      },
+      "attributes": []
+    },
+    {
+      "label": "IS_A",
+      "source": {
+        "label": "Workload"
+      },
+      "target": {
+        "label": "NetworkPolicy"
+      },
+      "attributes": []
+    },
+    {
+      "label": "CONTAINS",
+      "source": {
+        "label": "NetworkPolicy"
+      },
+      "target": {
+        "label": "Pod"
+      },
+      "attributes": []
+    }
+  ]
+}

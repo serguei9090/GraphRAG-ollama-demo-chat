@@ -102,13 +102,13 @@ class GraphRAGConfig:
 
         return cls(
             base_path=base_path,
-            kg_name=env("GRAPHRAG_KG_NAME", "graphrag_demo") or "graphrag_demo",
+            kg_name=env("GRAPHRAG_KG_NAME", "graphrag_demo"),
             ontology_path=ontology_path,
-            extraction_model=env("GRAPHRAG_EXTRACTION_MODEL", "openai/gpt-4.1") or "openai/gpt-4.1",
+            extraction_model=env("GRAPHRAG_EXTRACTION_MODEL", "openai/gpt-4.1"),
             cypher_model=env("GRAPHRAG_CYPHER_MODEL"),
-            ollama_model=env("OLLAMA_MODEL", "llama3.1:8b") or "llama3.1:8b",
-            ollama_base_url=env("OLLAMA_BASE_URL", "http://localhost:11434") or "http://localhost:11434",
-            falkordb_host=env("FALKORDB_HOST", "127.0.0.1") or "127.0.0.1",
+            ollama_model=env("OLLAMA_MODEL", "llama3.1:8b"),
+            ollama_base_url=env("OLLAMA_BASE_URL", "http://localhost:11434"),
+            falkordb_host=env("FALKORDB_HOST", "127.0.0.1"),
             falkordb_port=env_int("FALKORDB_PORT", 6379),
             falkordb_username=env("FALKORDB_USERNAME"),
             falkordb_password=env("FALKORDB_PASSWORD"),

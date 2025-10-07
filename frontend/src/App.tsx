@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import UploadForm from './components/UploadForm';
+import api from './lib/api';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
 const streamChat = async (prompt: string, onChunk: (chunk: string) => void) => {
-  const response = await fetch('/api/chat/stream', {
+  const response = await fetch(`${API_BASE}/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -16,16 +18,26 @@ const streamChat = async (prompt: string, onChunk: (chunk: string) => void) => {
     body: JSON.stringify({ prompt })
   });
 
-  if (!response.body) {
-    throw new Error('No response body');
+  if (!response.ok || !response.body) {
+    throw new Error('Unable to stream chat response');
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let chunk = await reader.read();
-  while (!chunk.done) {
-    onChunk(decoder.decode(chunk.value));
-    chunk = await reader.read();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      const finalChunk = decoder.decode();
+      if (finalChunk) {
+        onChunk(finalChunk);
+      }
+      break;
+    }
+
+    const text = decoder.decode(value, { stream: true });
+    if (text) {
+      onChunk(text);
+    }
   }
 };
 
@@ -37,7 +49,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchDocuments = async () => {
-    const { data } = await axios.get('/api/chat/documents');
+    const { data } = await api.get('/chat/documents');
     setDocuments(data.documents);
   };
 
@@ -49,7 +61,7 @@ const App: React.FC = () => {
     setStatus('ingesting');
     setError(null);
     try {
-      await axios.post('/api/chat/ingest');
+      await api.post('/chat/ingest');
       await fetchDocuments();
       setStatus('ready');
     } catch (err) {
@@ -63,26 +75,27 @@ const App: React.FC = () => {
     if (!input.trim()) return;
 
     const userMessage: ChatMessage = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '' }]);
     setInput('');
 
     try {
+      setStatus('chatting');
       let assistantMessage = '';
       await streamChat(userMessage.content, (chunk) => {
         assistantMessage += chunk;
         setMessages((prev) => {
           const next = [...prev];
-          const last = next[next.length - 1];
-          if (last && last.role === 'assistant' && last.content === assistantMessage.slice(0, -chunk.length)) {
-            next[next.length - 1] = { role: 'assistant', content: assistantMessage };
-          } else {
-            next.push({ role: 'assistant', content: assistantMessage });
+          const lastIndex = next.length - 1;
+          if (next[lastIndex]?.role === 'assistant') {
+            next[lastIndex] = { role: 'assistant', content: assistantMessage };
           }
           return next;
         });
       });
+      setStatus('ready');
     } catch (err) {
       setError('Chat failed. Ensure the backend is running.');
+      setStatus('error');
     }
   };
 

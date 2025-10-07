@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -14,12 +14,12 @@ class ChatRequest(BaseModel):
     prompt: str
 
 
-def get_engine() -> GraphRAGChatEngine:
-    return router.state.engine  # type: ignore[attr-defined]
+def get_engine(request: Request) -> GraphRAGChatEngine:
+    return request.app.state.engine  # type: ignore[attr-defined]
 
 
-def get_ingestor() -> DataDirectoryIngestor:
-    return router.state.ingestor  # type: ignore[attr-defined]
+def get_ingestor(request: Request) -> DataDirectoryIngestor:
+    return request.app.state.ingestor  # type: ignore[attr-defined]
 
 
 @router.post("/ingest")
@@ -27,7 +27,10 @@ def ingest_documents(ingestor: DataDirectoryIngestor = Depends(get_ingestor), en
     documents = ingestor.collect_documents()
     if not documents:
         raise HTTPException(status_code=404, detail="No documents found for ingestion")
-    return engine.ingest(documents)
+    engine.reset()
+    result = engine.ingest(documents)
+    result["document_names"] = [doc.name for doc in documents]
+    return result
 
 
 @router.post("/upload")

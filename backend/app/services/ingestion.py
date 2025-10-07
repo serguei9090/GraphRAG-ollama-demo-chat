@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+import hashlib
 from typing import List
 
 from .graphrag import Document
@@ -67,26 +68,54 @@ class DataDirectoryIngestor:
             pass
         return [line.strip() for line in raw.splitlines() if line.strip()]
 
+    def _fetch_remote_documents(self) -> List[Document]:
+        """Load documents defined in URL manifests."""
+
+        documents: List[Document] = []
+        try:
+            import httpx  # type: ignore
+        except Exception:  # pragma: no cover - optional dependency
+            LOGGER.warning("httpx not available, skipping URL ingestion")
+            return documents
+
+        for manifest in sorted(self.url_dir.glob("*.txt")):
+            urls = self._read_url_manifest(manifest)
+            for index, url in enumerate(urls, start=1):
+                doc_id = hashlib.sha1(url.encode("utf-8")).hexdigest()[:8]
+                name = f"{manifest.stem}_{index}_{doc_id}.url"
+                metadata = {"source": "url", "url": url, "manifest": manifest.name}
+                try:
+                    response = httpx.get(url, timeout=10.0, follow_redirects=True)
+                    response.raise_for_status()
+                    content = response.text
+                    metadata["status"] = str(response.status_code)
+                except Exception as exc:  # pragma: no cover - network failure path
+                    LOGGER.warning("Failed to fetch %s: %s", url, exc)
+                    content = ""
+                    metadata["status"] = "error"
+                    metadata["error"] = str(exc)
+
+                if content.strip():
+                    documents.append(Document(name=name, content=content, metadata=metadata))
+
+        return documents
+
     def collect_documents(self) -> List[Document]:
         documents: List[Document] = []
 
         if self.pdf_dir.exists():
             for pdf in sorted(self.pdf_dir.glob("*.pdf")):
-                documents.append(Document(name=pdf.name, content=self._read_pdf(pdf), metadata={"source": "pdf"}))
+                content = self._read_pdf(pdf)
+                if content.strip():
+                    documents.append(Document(name=pdf.name, content=content, metadata={"source": "pdf"}))
 
         if self.txt_dir.exists():
             for txt in sorted(self.txt_dir.glob("*.txt")):
-                documents.append(Document(name=txt.name, content=self._read_text(txt), metadata={"source": "txt"}))
+                content = self._read_text(txt)
+                if content.strip():
+                    documents.append(Document(name=txt.name, content=content, metadata={"source": "txt"}))
 
         if self.url_dir.exists():
-            for manifest in sorted(self.url_dir.glob("*.txt")):
-                urls = self._read_url_manifest(manifest)
-                documents.append(
-                    Document(
-                        name=manifest.name,
-                        content="\n".join(urls),
-                        metadata={"source": "url", "count": str(len(urls))},
-                    )
-                )
+            documents.extend(self._fetch_remote_documents())
 
         return documents

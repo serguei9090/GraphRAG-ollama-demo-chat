@@ -42,7 +42,7 @@ tests/
 2. Install backend dependencies.
 
    ```bash
-   pip install fastapi uvicorn[standard] pydantic PyPDF2 pytest
+   pip install -r requirements.txt
    ```
 
 3. Run the FastAPI application.
@@ -65,7 +65,7 @@ You can also upload `.pdf` and `.txt` files from the frontend, which will store 
 
 - `GET /health`: Simple health check.
 - `POST /chat/upload`: Upload a `.pdf` or `.txt` file. The backend stores the file and makes it available for ingestion.
-- `POST /chat/ingest`: Read documents from the data directories and load them into the in-memory GraphRAG stub.
+- `POST /chat/ingest`: Read documents from the data directories (including remote URL manifests) and load them into the in-memory GraphRAG stub.
 - `GET /chat/documents`: List the currently ingested documents.
 - `POST /chat/stream`: Stream a chat response based on the ingested documents. The request body should be JSON with a `prompt` field.
 
@@ -85,6 +85,8 @@ You can also upload `.pdf` and `.txt` files from the frontend, which will store 
    ```
 
 The Vite dev server proxies API requests from `/api/*` to the FastAPI backend running on `http://localhost:8000`.
+
+You can override the API base URL by defining `VITE_API_BASE_URL` when building or running the frontend (defaults to `/api`).
 
 ## Running Tests
 

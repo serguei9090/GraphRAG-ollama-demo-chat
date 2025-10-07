@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 
 interface UploadFormProps {
   onUploadSuccess: () => void;
@@ -19,7 +19,7 @@ const UploadForm: React.FC<UploadFormProps> = ({ onUploadSuccess, onError }) => 
 
     try {
       setUploading(true);
-      await axios.post('/api/chat/upload', formData, {
+      await api.post('/chat/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setFile(null);

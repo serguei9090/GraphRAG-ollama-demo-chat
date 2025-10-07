@@ -13,15 +13,14 @@ from .services.ingestion import DataDirectoryIngestor
 LOGGER = logging.getLogger(__name__)
 
 
-def create_app() -> FastAPI:
-    base_path = Path(__file__).resolve().parents[2]
+def create_app(*, base_path: Path | None = None, engine: GraphRAGChatEngine | None = None) -> FastAPI:
+    """Application factory used by both production and tests."""
+
+    resolved_base = base_path or Path(__file__).resolve().parents[2]
     app = FastAPI(title="GraphRAG Ollama Demo")
 
-    engine = GraphRAGChatEngine()
-    ingestor = DataDirectoryIngestor(base_path=base_path)
-
-    chat.router.state.engine = engine  # type: ignore[attr-defined]
-    chat.router.state.ingestor = ingestor  # type: ignore[attr-defined]
+    app.state.engine = engine or GraphRAGChatEngine()
+    app.state.ingestor = DataDirectoryIngestor(base_path=resolved_base)
 
     app.include_router(chat.router)
 

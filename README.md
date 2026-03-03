@@ -1,5 +1,11 @@
 # GraphRAG Ollama Demo Chat
 
+## This is a personal learning project created for educational purposes and to explore different code concepts with ai concepts. 
+
+* **Status:** Personal sandbox / Portfolio piece.
+* **License:** This project is open-source and available for public educational use under the MIT License.
+* **Purpose:** Academic research and technical skill development.
+
 This project delivers a full-stack Retrieval-Augmented Generation (RAG) experience that combines the
 [FalkorDB GraphRAG-SDK](https://github.com/FalkorDB/GraphRAG-SDK) with a local
 [Ollama](https://ollama.ai/) deployment running the `llama3.1:8b` model. The backend exposes FastAPI
